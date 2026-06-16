@@ -4,7 +4,7 @@ const {
   GatewayIntentBits,
   Partials,
   Collection,
-  EmbedBuilder, // ADDED: Required to construct the system embed card
+  EmbedBuilder,
 } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
@@ -18,8 +18,43 @@ const {
   personalityQnA,
 } = require("./data/personas");
 
-// FIX: Import the exported object directly so 'state.serverChannels' exists
+// Import the exported object directly
 const state = require("./data/state");
+
+// --- CHANNEL PERSISTENCE (Prevents forgetting channels on restart) ---
+const CHANNELS_FILE = path.join(__dirname, "..", "active_channels.json");
+
+// 1. Load saved channels from disk immediately on startup
+if (fs.existsSync(CHANNELS_FILE)) {
+  try {
+    const data = fs.readFileSync(CHANNELS_FILE, "utf8");
+    if (data) Object.assign(state.serverChannels, JSON.parse(data));
+  } catch (err) {
+    console.error("Error loading saved channels:", err);
+  }
+}
+
+// 2. Proxy Watcher: Automatically writes to disk when commands modify state.serverChannels
+state.serverChannels = new Proxy(state.serverChannels, {
+  set(target, prop, value) {
+    target[prop] = value;
+    try {
+      fs.writeFileSync(CHANNELS_FILE, JSON.stringify(target, null, 2));
+    } catch (err) {
+      console.error("Error saving channels configuration:", err);
+    }
+    return true;
+  },
+  deleteProperty(target, prop) {
+    delete target[prop];
+    try {
+      fs.writeFileSync(CHANNELS_FILE, JSON.stringify(target, null, 2));
+    } catch (err) {
+      console.error("Error saving channels configuration:", err);
+    }
+    return true;
+  },
+});
 
 // ------------------ CONFIG ------------------
 const TOKEN = process.env.TOKEN3;
@@ -71,7 +106,6 @@ async function manualResponse() {
 }
 
 // ------------------ EVENTS ------------------
-// FIX: Changed "ready" to "clientReady" to fix the v15 deprecation warning
 client.once("clientReady", async () => {
   console.log(`Vierry logged in as ${client.user.tag}`);
   loadMemory();
@@ -91,12 +125,11 @@ client.once("clientReady", async () => {
   }
   console.log("Bot is ready and commands loaded!");
 
-  // --- SYSTEM LOG EMITTER (Fires on boot to LOG_CHANNEL_ID) ---
+  // --- SYSTEM LOG EMITTER ---
   const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
   if (LOG_CHANNEL_ID) {
     const logChannel = client.channels.cache.get(LOG_CHANNEL_ID);
     if (logChannel) {
-      // Dynamic math to get real system specs and format time
       const memoryUsed = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(
         2,
       );
@@ -108,7 +141,7 @@ client.once("clientReady", async () => {
       });
 
       const logEmbed = new EmbedBuilder()
-        .setColor("#7252a1") // Deep purple theme color matching your UI photo
+        .setColor("#7252a1")
         .setAuthor({
           name: "System Notification",
           iconURL: client.user.displayAvatarURL(),
@@ -211,7 +244,7 @@ client.on("messageCreate", async (message) => {
       state.userMemory[userId][category] =
         answers[Math.floor(Math.random() * answers.length)];
       message.channel.send(state.userMemory[userId][category]);
-      saveMemory(); // Kept intact right here!
+      saveMemory();
       return;
     }
   }
