@@ -74,7 +74,7 @@ async function manualResponse() {
 
 // ------------------ EVENTS ------------------
 client.once("ready", async () => {
-  console.log(`Vierry (Bot 3) logged in as ${client.user.tag}`);
+  console.log(`Vierry (Bot) logged in as ${client.user.tag}`);
   loadMemory();
   console.log("Bot is ready and memory loaded!");
 });
