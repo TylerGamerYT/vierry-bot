@@ -1,5 +1,16 @@
 {
+  "name": "vierry-bot",
+  "version": "2.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
   "dependencies": {
+    "discord.js": "^14.17.3",
+    "@discordjs/builders": "^1.10.0",
+    "@discordjs/rest": "^2.4.0",
+    "discord-api-types": "^0.37.118",
+    "dotenv": "^16.4.7",
     "openai": "^6.42.0"
   }
 }
