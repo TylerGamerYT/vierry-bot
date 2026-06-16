@@ -24,7 +24,6 @@ const state = require("./data/state");
 // --- CHANNEL PERSISTENCE (Prevents forgetting channels on restart) ---
 const CHANNELS_FILE = path.join(__dirname, "..", "active_channels.json");
 
-// 1. Load saved channels from disk immediately on startup
 if (fs.existsSync(CHANNELS_FILE)) {
   try {
     const data = fs.readFileSync(CHANNELS_FILE, "utf8");
@@ -34,7 +33,6 @@ if (fs.existsSync(CHANNELS_FILE)) {
   }
 }
 
-// 2. Proxy Watcher: Automatically writes to disk when commands modify state.serverChannels
 state.serverChannels = new Proxy(state.serverChannels, {
   set(target, prop, value) {
     target[prop] = value;
@@ -214,6 +212,7 @@ client.on("messageCreate", async (message) => {
   const userId = message.author.id;
   const channelId = message.channel.id;
 
+  // 1. Mood triggers
   if (
     ["hru", "how are you", "how r u", "how's it going"].some((x) =>
       content.includes(x),
@@ -238,6 +237,7 @@ client.on("messageCreate", async (message) => {
     }
   }
 
+  // 2. Personality Memory updates
   for (const [category, answers] of Object.entries(personalityQnA)) {
     if (content.includes(category)) {
       state.userMemory[userId] = state.userMemory[userId] || {};
@@ -249,8 +249,52 @@ client.on("messageCreate", async (message) => {
     }
   }
 
+  // 3. Smart AI Fallback Chat (Triggers when the bot is actively pinged/mentioned)
   if (message.mentions.has(client.user)) {
-    message.channel.send(await manualResponse());
+    // Clean out the raw text mention string (e.g. <@123456789>) so it doesn't break the AI's focus
+    const cleanPrompt = message.content.replace(/<@!?\d+>/g, "").trim();
+
+    if (!cleanPrompt) {
+      return message.channel.send("Hmm? Did you call me? 🌸");
+    }
+
+    const HF_KEY = process.env.HF_KEY;
+    if (HF_KEY) {
+      try {
+        // Trigger standard typing indicator bubble while waiting for API processing
+        await message.channel.sendTyping();
+
+        const { HfInference } = require("@huggingface/inference");
+        const hf = new HfInference(HF_KEY);
+
+        const apiOutput = await hf.chatCompletion({
+          model: "Qwen/Qwen2.5-7B-Instruct",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are Vierry, a sweet, cute, and beautiful anime chatbot companion. Speak in a friendly, warm, playful companion style. Keep your responses short (1-3 sentences), engaging, and filled with cute expressions or emojis. Never state that you are an artificial intelligence or a language model.",
+            },
+            { role: "user", content: cleanPrompt },
+          ],
+          max_tokens: 120,
+        });
+
+        const aiReply = apiOutput.choices[0].message.content;
+        if (aiReply) {
+          return message.channel.send(aiReply);
+        }
+      } catch (error) {
+        console.error(
+          "AI text pipeline crashed, deploying backup array response:",
+          error,
+        );
+        // Fail-safe logic: If the HuggingFace API goes offline, instantly drop back to a pre-coded array phrase smoothly
+      }
+    }
+
+    // Default backup response execution
+    return message.channel.send(await manualResponse());
   }
 });
 
