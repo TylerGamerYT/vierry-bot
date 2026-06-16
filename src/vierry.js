@@ -4,6 +4,7 @@ const {
   GatewayIntentBits,
   Partials,
   Collection,
+  EmbedBuilder, // ADDED: Required to construct the system embed card
 } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
@@ -89,10 +90,71 @@ client.once("clientReady", async () => {
     }
   }
   console.log("Bot is ready and commands loaded!");
+
+  // --- SYSTEM LOG EMITTER (Fires on boot to LOG_CHANNEL_ID) ---
+  const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
+  if (LOG_CHANNEL_ID) {
+    const logChannel = client.channels.cache.get(LOG_CHANNEL_ID);
+    if (logChannel) {
+      // Dynamic math to get real system specs and format time
+      const memoryUsed = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(
+        2,
+      );
+      const serverCount = client.guilds.cache.size;
+      const currentTime = new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+
+      const logEmbed = new EmbedBuilder()
+        .setColor("#7252a1") // Deep purple theme color matching your UI photo
+        .setAuthor({
+          name: "System Notification",
+          iconURL: client.user.displayAvatarURL(),
+        })
+        .setTitle("🚀 Deployment Successful")
+        .setDescription(
+          `The bot \`${client.user.tag}\` has successfully bypassed the gateway and is now active.`,
+        )
+        .addFields(
+          { name: "🔌 Mode", value: "`Global / User-App`", inline: true },
+          { name: "🟢 Health", value: "`Operational`", inline: true },
+          {
+            name: "📁 Scripts",
+            value: `\`${client.commands.size} Modules\``,
+            inline: true,
+          },
+          {
+            name: "🌐 Network",
+            value: `\`Connected to ${serverCount} Server${serverCount === 1 ? "" : "s"}\``,
+            inline: true,
+          },
+          { name: "🧠 Memory", value: `\`${memoryUsed} MB\``, inline: true },
+          {
+            name: "🔗 Quick Links",
+            value: `[Invite Me](https://discord.com/oauth2/authorize?client_id=${client.user.id}&permissions=8&scope=bot%20applications.commands)`,
+            inline: false,
+          },
+        )
+        .setFooter({
+          text: `Vierry v2.5 • System Integrity Verified • Today at ${currentTime}`,
+        });
+
+      await logChannel
+        .send({ embeds: [logEmbed] })
+        .catch((err) => console.error("Failed sending startup log:", err));
+    } else {
+      console.warn(
+        `System Logger: Channel ID ${LOG_CHANNEL_ID} was not found in cache.`,
+      );
+    }
+  }
 });
 
 // ------------------ AUTO CHAT ------------------
 setInterval(async () => {
+  if (!state.serverChannels) return;
   for (const [guildId, channelId] of Object.entries(state.serverChannels)) {
     const guild = client.guilds.cache.get(guildId);
     if (!guild) continue;
@@ -149,7 +211,7 @@ client.on("messageCreate", async (message) => {
       state.userMemory[userId][category] =
         answers[Math.floor(Math.random() * answers.length)];
       message.channel.send(state.userMemory[userId][category]);
-      saveMemory();
+      saveMemory(); // Kept intact right here!
       return;
     }
   }

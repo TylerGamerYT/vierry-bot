@@ -4,7 +4,7 @@ const { AttachmentBuilder } = require("discord.js");
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("image")
-    .setDescription("Generate an image using AI (OpenAI or Gemini)")
+    .setDescription("Generate an image using AI (OpenAI or Stable Diffusion)")
     .addStringOption((option) =>
       option
         .setName("prompt")
@@ -15,17 +15,18 @@ module.exports = {
   async execute(interaction) {
     const prompt = interaction.options.getString("prompt");
     const OPENAI_KEY = process.env.OPENAI_KEY;
-    const GEMINI_KEY = process.env.GEMINI_KEY;
+    const HF_KEY = process.env.HF_KEY;
 
-    // 1. Guard check if neither key is available
-    if (!OPENAI_KEY && !GEMINI_KEY) {
+    // Guard: Check if neither key is available
+    if (!OPENAI_KEY && !HF_KEY) {
       return interaction.reply({
-        content: "❌ Neither OpenAI nor Gemini API keys are set. AI disabled.",
+        content:
+          "❌ Neither OpenAI nor Hugging Face API keys are set. AI disabled.",
         ephemeral: true,
       });
     }
 
-    // Defer reply immediately so Discord gives the AI time to generate
+    // Defer reply immediately so Discord gives the bot time to generate
     await interaction.deferReply();
 
     let attachment;
@@ -34,6 +35,8 @@ module.exports = {
     try {
       if (OPENAI_KEY) {
         // --- OPENAI MODE ---
+        statusNotice = "ℹ️ **Generating with OpenAI DALL-E 3.**\n\n";
+
         const OpenAI = require("openai");
         const openai = new OpenAI({ apiKey: OPENAI_KEY });
 
@@ -49,38 +52,49 @@ module.exports = {
           name: "openai_image.png",
         });
       } else {
-        // --- GEMINI FALLBACK MODE ---
-        statusNotice = "⚠️ **OpenAI key not set, Gemini enabled.**\n\n";
+        // --- HUGGING FACE SDK MODE ---
+        statusNotice =
+          "⚠️ **OpenAI key not set, using Free (Stable Diffusion XL) model.**\n\n";
 
-        const { GoogleGenAI } = require("@google/genai");
-        const ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
+        // Use the official SDK to prevent "fetch failed" socket drops
+        const { HfInference } = require("@huggingface/inference");
+        const hf = new HfInference(HF_KEY);
 
-        const response = await ai.models.generateImages({
-          model: "imagen-3.0-generate-002",
-          prompt: prompt,
-          config: {
-            numberOfImages: 1,
-            outputMimeType: "image/jpeg",
+        // We use stable-diffusion-xl-base-1.0 because it's fast, free, and completely un-gated
+        const imageBlob = await hf.textToImage({
+          model: "stabilityai/stable-diffusion-xl-base-1.0",
+          inputs: prompt,
+          parameters: {
+            negative_prompt: "blurry, bad quality, distorted",
           },
         });
 
-        // Convert base64 string from Gemini API into a usable buffer for Discord
-        const base64Image = response.generatedImages[0].image.imageBytes;
-        const buffer = Buffer.from(base64Image, "base64");
+        // Convert the SDK blob directly into a Node buffer for Discord
+        const arrayBuffer = await imageBlob.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
         attachment = new AttachmentBuilder(buffer, {
-          name: "gemini_image.jpg",
+          name: "stable_diffusion_image.jpg",
         });
       }
 
-      // Deliver the final generated asset with the dynamic status text
+      // Deliver final asset
       await interaction.editReply({
-        content: `${statusNotice}🎨 Here is your image for: *"${prompt}"*`,
+        content: `${statusNotice}🎨 Here is your free image for: *"${prompt}"*`,
         files: [attachment],
       });
     } catch (error) {
-      console.error("Image generation error:", error);
+      console.error("Image generation crash:", error);
+
+      // Handle the common Hugging Face free-tier loading state gracefully
+      if (error.message.includes("503") || error.message.includes("loading")) {
+        return interaction.editReply({
+          content:
+            "⏳ **Free Service Notice:** The generation model is currently warming up on Hugging Face's servers. Please wait 15 seconds and try your prompt again!",
+        });
+      }
+
       await interaction.editReply({
-        content: `❌ Failed to generate image: ${error.message}`,
+        content: `❌ Generation crashed: ${error.message}`,
       });
     }
   },

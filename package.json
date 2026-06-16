@@ -9,6 +9,7 @@
     "@discordjs/builders": "^1.10.0",
     "@discordjs/rest": "^2.4.0",
     "@google/genai": "^2.9.0-rc.0",
+    "@huggingface/inference": "^4.13.19",
     "discord-api-types": "^0.37.118",
     "discord.js": "^14.17.3",
     "dotenv": "^16.4.7",
