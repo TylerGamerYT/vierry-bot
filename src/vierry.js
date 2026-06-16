@@ -16,7 +16,9 @@ const {
   moodReasons,
   personalityQnA,
 } = require("./data/personas");
-const { state } = require("./data/state");
+
+// FIX: Import the exported object directly so 'state.serverChannels' exists
+const state = require("./data/state");
 
 // ------------------ CONFIG ------------------
 const TOKEN = process.env.TOKEN3;
@@ -68,7 +70,8 @@ async function manualResponse() {
 }
 
 // ------------------ EVENTS ------------------
-client.once("ready", async () => {
+// FIX: Changed "ready" to "clientReady" to fix the v15 deprecation warning
+client.once("clientReady", async () => {
   console.log(`Vierry logged in as ${client.user.tag}`);
   loadMemory();
 
