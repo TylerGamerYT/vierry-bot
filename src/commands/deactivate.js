@@ -1,7 +1,6 @@
-// src/commands/deactivate.js
 const { SlashCommandBuilder } = require("@discordjs/builders");
-// Import the shared object directly from your main file
-const { serverChannels } = require("../vierry");
+// Import the shared state object
+const { state } = require("../vierry");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -11,8 +10,9 @@ module.exports = {
   async execute(interaction) {
     const guildId = interaction.guild.id;
 
-    if (serverChannels[guildId]) {
-      delete serverChannels[guildId];
+    // Access serverChannels through the state object
+    if (state.serverChannels[guildId]) {
+      delete state.serverChannels[guildId];
       await interaction.reply({
         content: `❌ Vierry deactivated in this channel.`,
         ephemeral: true,

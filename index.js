@@ -1,22 +1,24 @@
-// index.js — Vierry command loader
+// index.js — The Entry Point & Command Loader
+require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
-require("dotenv").config();
+const { Collection } = require("discord.js");
+const { client } = require("./src/vierry");
 
-// Now pointing to the new location in src/
-const vierry = require("./src/vierry");
-
-// Now pointing to the new location in src/commands/
-const commandsPath = path.join(__dirname, "src", "commands");
+client.commands = new Collection();
 
 // Dynamically load all JS files in the commands folder
-fs.readdirSync(commandsPath)
-  .filter((file) => file.endsWith(".js"))
-  .forEach((file) => {
-    const command = require(path.join(commandsPath, file));
-    // Assuming your command files export a 'data' object with a 'name' property
-    vierry.commands.set(command.data.name, command);
-    console.log(`Loaded command: ${command.data.name}`);
-  });
+const commandsPath = path.join(__dirname, "src", "commands");
+const commandFiles = fs
+  .readdirSync(commandsPath)
+  .filter((file) => file.endsWith(".js"));
 
-console.log("All Vierry commands loaded!");
+for (const file of commandFiles) {
+  const command = require(path.join(commandsPath, file));
+  if (command.data && command.execute) {
+    client.commands.set(command.data.name, command);
+    console.log(`Loaded command: ${command.data.name}`);
+  }
+}
+
+console.log("All Vierry commands loaded and bot is ready!");
